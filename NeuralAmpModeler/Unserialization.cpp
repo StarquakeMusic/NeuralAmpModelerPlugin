@@ -65,6 +65,45 @@ void NeuralAmpModeler::_UnserializeApplyConfig(nlohmann::json& config)
   {
     _StageIR(mIRPath);
   }
+
+  mEdgeIRPath.Set(config.value("EdgeIRPath", std::string()).c_str());
+  if (mEdgeIRPath.GetLength())
+  {
+    _StageEdgeIR(mEdgeIRPath);
+  }
+  else
+  {
+    mShouldRemoveEdgeIR = true;
+    std::lock_guard<std::mutex> lock(mGearInfoMutex);
+    mPendingEdgeIRName.clear();
+    mEdgeIRChanged = true;
+  }
+}
+
+// The rig UI writes the mic params, a marker, and the edge IR path after the usual layout (see SerializeState()).
+// States from other builds end before that, or have something else there, so fall back to defaults unless the marker
+// is found.
+int _UnserializeRigExtras(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config)
+{
+  config["MicPosition"] = 0.0;
+  config["MicDistance"] = 0.0;
+  config["EdgeIRPath"] = std::string();
+
+  double position = 0.0, distance = 0.0;
+  WDL_String marker, edgeIRPath;
+  int pos = chunk.Get(&position, startPos);
+  pos = chunk.Get(&distance, pos);
+  pos = chunk.GetStr(marker, pos);
+  if (pos < 0 || strcmp(marker.Get(), kRigStateMarker) != 0)
+    return startPos;
+  pos = chunk.GetStr(edgeIRPath, pos);
+  if (pos < 0)
+    return startPos;
+
+  config["MicPosition"] = position;
+  config["MicDistance"] = distance;
+  config["EdgeIRPath"] = std::string(edgeIRPath.Get());
+  return pos;
 }
 
 // Unserialize NAM Path, IR path, then named keys
@@ -97,11 +136,41 @@ void _RenameKeys(nlohmann::json& j, std::unordered_map<std::string, std::string>
   }
 }
 
+// v0.7.16
+
+void _UpdateConfigFrom_0_7_16(nlohmann::json& config)
+{
+  // Fill me in once something changes!
+}
+
+int _GetConfigFrom_0_7_16(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config)
+{
+  std::vector<std::string> paramNames{"Input",
+                                      "Threshold",
+                                      "Bass",
+                                      "Middle",
+                                      "Treble",
+                                      "Output",
+                                      "NoiseGateActive",
+                                      "ToneStack",
+                                      "IRToggle",
+                                      "CalibrateInput",
+                                      "InputCalibrationLevel",
+                                      "OutputMode",
+                                      "Slim",
+                                      "Mix"};
+
+  int pos = _UnserializePathsAndExpectedKeys(chunk, startPos, config, paramNames);
+  _UpdateConfigFrom_0_7_16(config);
+  return pos;
+}
+
 // v0.7.14
 
 void _UpdateConfigFrom_0_7_14(nlohmann::json& config)
 {
-  // Fill me in once something changes!
+  config["Mix"] = 100.0;
+  _UpdateConfigFrom_0_7_16(config);
 }
 
 int _GetConfigFrom_0_7_14(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config)
@@ -277,7 +346,11 @@ int NeuralAmpModeler::_UnserializeStateWithKnownVersion(const iplug::IByteChunk&
   _Version version(versionStr);
   // Act accordingly
   nlohmann::json config;
-  if (version >= _Version(0, 7, 14))
+  if (version >= _Version(0, 7, 16))
+  {
+    pos = _GetConfigFrom_0_7_16(chunk, pos, config);
+  }
+  else if (version >= _Version(0, 7, 14))
   {
     pos = _GetConfigFrom_0_7_14(chunk, pos, config);
   }
@@ -298,6 +371,7 @@ int NeuralAmpModeler::_UnserializeStateWithKnownVersion(const iplug::IByteChunk&
     // You shouldn't be here...
     assert(false);
   }
+  pos = _UnserializeRigExtras(chunk, pos, config);
   _UnserializeApplyConfig(config);
   return pos;
 }
@@ -306,6 +380,7 @@ int NeuralAmpModeler::_UnserializeStateWithUnknownVersion(const iplug::IByteChun
 {
   nlohmann::json config;
   int pos = _GetConfigFrom_Earlier(chunk, startPos, config);
+  pos = _UnserializeRigExtras(chunk, pos, config);
   _UnserializeApplyConfig(config);
   return pos;
 }

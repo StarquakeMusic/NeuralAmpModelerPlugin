@@ -8,11 +8,17 @@
 #include "../NeuralAmpModelerCore/NAM/dsp.h"
 #include "../NeuralAmpModelerCore/NAM/slimmable.h"
 
+#include <array>
+#include <mutex>
+
 #include "Colors.h"
+#include "NAMLibrary.h"
+#include "NAMTheme.h"
 #include "ToneStack.h"
 
 #include "IPlug_include_in_plug_hdr.h"
 #include "ISender.h"
+#include "Smoothers.h"
 
 
 const int kNumPresets = 1;
@@ -47,10 +53,12 @@ enum EParams
   kInputCalibrationLevel,
   kOutputMode,
   kSlim,
+  // Keep new parameters at the end so existing automation parameter IDs remain stable.
+  kMix,
+  kMicPosition,
+  kMicDistance,
   kNumParams
 };
-
-const int numKnobs = 6;
 
 enum ECtrlTags
 {
@@ -65,6 +73,7 @@ enum ECtrlTags
   kCtrlTagSlimmableIcon,
   kCtrlTagSlimOverlayBackdrop,
   kCtrlTagSlimKnob,
+  kCtrlTagLibrary,
   kNumCtrlTags
 };
 
@@ -78,6 +87,8 @@ enum EMsgTags
   kMsgTagLoadFailed,
   kMsgTagLoadedModel,
   kMsgTagLoadedIR,
+  // UI -> DSP
+  kMsgTagClearEdgeIR,
   kNumMsgTags
 };
 
@@ -235,17 +246,26 @@ private:
   // Return status code so that error messages can be relayed if
   // it wasn't successful.
   dsp::wav::LoadReturnCode _StageIR(const WDL_String& irPath);
+  // Same, for the second IR the mic blends toward.
+  dsp::wav::LoadReturnCode _StageEdgeIR(const WDL_String& irPath);
+  // Runs the cab stage: the IR(s) and the mic placement voicing.
+  iplug::sample** _ProcessCab(iplug::sample** inputs, const size_t numFrames, const double sampleRate);
+  // Opens the capture library on the folder of the current model, asking for one if there isn't any.
+  void _OpenLibrary(iplug::igraphics::IGraphics* pGraphics);
 
   bool _HaveModel() const { return this->mModel != nullptr; };
   // Prepare the input & output buffers
   void _PrepareBuffers(const size_t numChannels, const size_t numFrames);
   // Manage pointers
   void _PrepareIOPointers(const size_t nChans);
+  // Preserve the unprocessed external input for the global dry/wet blend.
+  void _CaptureDryInput(iplug::sample** inputs, const size_t nFrames, const size_t nChansIn,
+                        const size_t nChansOut);
   // Copy the input buffer to the object, applying input level.
   // :param nChansIn: In from external
   // :param nChansOut: Out to the internal of the DSP routine
   void _ProcessInput(iplug::sample** inputs, const size_t nFrames, const size_t nChansIn, const size_t nChansOut);
-  // Copy the output to the output buffer, applying output level.
+  // Blend the processed signal with the untouched input, then apply output level.
   // :param nChansIn: In from internal
   // :param nChansOut: Out to external
   void _ProcessOutput(iplug::sample** inputs, iplug::sample** outputs, const size_t nFrames, const size_t nChansIn,
@@ -273,6 +293,10 @@ private:
   // Update level meters
   // Called within ProcessBlock().
   // Assume _ProcessInput() and _ProcessOutput() were run immediately before.
+  // Picks up model/IR changes and the output level for the rig visuals. UI thread.
+  void _UpdateRigVisuals();
+  // Copies the latest triggered stretch of output into mTheme.scope.
+  void _UpdateScope();
   void _UpdateMeters(iplug::sample** inputPointer, iplug::sample** outputPointer, const size_t nFrames,
                      const size_t nChansIn, const size_t nChansOut);
 
@@ -282,6 +306,8 @@ private:
   std::vector<std::vector<iplug::sample>> mInputArray;
   // Output from NAM
   std::vector<std::vector<iplug::sample>> mOutputArray;
+  // Untouched input, mapped to the external output channel layout.
+  std::vector<std::vector<iplug::sample>> mDryArray;
   // Pointer versions
   iplug::sample** mInputPointers = nullptr;
   iplug::sample** mOutputPointers = nullptr;
@@ -289,6 +315,7 @@ private:
   // Input and output gain
   double mInputGain = 1.0;
   double mOutputGain = 1.0;
+  iplug::LogParamSmooth<double, 1> mMixSmoother{20.0, 1.0};
 
   // Noise gates
   dsp::noise_gate::Trigger mNoiseGateTrigger;
@@ -300,15 +327,32 @@ private:
   // Manages switching what DSP is being used.
   std::unique_ptr<ResamplingNAM> mStagedModel;
   std::unique_ptr<dsp::ImpulseResponse> mStagedIR;
+  // Second IR (e.g. the same cab miked at the edge of the cone) that the mic position blends toward
+  std::unique_ptr<dsp::ImpulseResponse> mEdgeIR;
+  std::unique_ptr<dsp::ImpulseResponse> mStagedEdgeIR;
   // Flags to take away the modules at a safe time.
   std::atomic<bool> mShouldRemoveModel = false;
   std::atomic<bool> mShouldRemoveIR = false;
+  std::atomic<bool> mShouldRemoveEdgeIR = false;
 
   std::atomic<bool> mNewModelLoadedInDSP = false;
   std::atomic<bool> mModelCleared = false;
 
   // Tone stack modules
   std::unique_ptr<dsp::tone_stack::AbstractToneStack> mToneStack;
+
+  // Mic placement. Moving off axis darkens the top end (unless there's an edge IR to blend to); backing off loses
+  // proximity bass and some air.
+  recursive_linear_filter::Peaking mMicBody;
+  recursive_linear_filter::HighShelf mMicOffAxis;
+  recursive_linear_filter::LowShelf mMicProximity;
+  recursive_linear_filter::HighShelf mMicAir;
+  // Settings the mic filters were last designed for
+  double mMicVoicedPosition = -1.0, mMicVoicedDistance = -1.0, mMicVoicedSampleRate = 0.0;
+  // Current (smoothed) blend from the main IR to the edge IR
+  double mEdgeBlend = 0.0;
+  std::vector<iplug::sample> mCabBlendArray;
+  iplug::sample* mCabBlendPointer = nullptr;
 
   // Post-IR filters
   recursive_linear_filter::HighPass mHighPass;
@@ -318,10 +362,34 @@ private:
   WDL_String mNAMPath;
   // Path to IR (.wav file)
   WDL_String mIRPath;
+  WDL_String mEdgeIRPath;
 
   WDL_String mHighLightColor{PluginColors::NAM_THEMECOLOR.ToColorCode()};
 
   std::unordered_map<std::string, double> mNAMParams = {{"Input", 0.0}, {"Output", 0.0}};
 
   NAMSender mInputSender, mOutputSender;
+
+  // Rig visuals
+  NAMTheme mTheme;
+  // Gear info from the most recently staged model, handed to mTheme on the UI thread.
+  std::mutex mGearInfoMutex;
+  NAMGearInfo mPendingGearInfo;
+  std::atomic<bool> mGearInfoChanged = false;
+  std::atomic<bool> mIRPresent = false;
+  // Edge IR name for the cab, handed over like the gear info.
+  std::string mPendingEdgeIRName;
+  std::atomic<bool> mEdgeIRChanged = false;
+  std::atomic<float> mOutputPeak = 0.f;
+  std::atomic<float> mModelInputPeak = 0.f;
+  // Recent output for the scope, written by the audio thread.
+  static constexpr size_t kScopeRingSize = 16384;
+  std::array<std::atomic<float>, kScopeRingSize> mScopeRing{};
+  std::atomic<size_t> mScopeWrite = 0;
+  std::vector<float> mScopeScratch;
+
+  // Capture library
+  NAMLibrary mLibrary;
+  // Folder picked in the library when no model gave us one
+  std::string mLibraryFolder;
 };

@@ -6,6 +6,7 @@
 #include <unordered_map> // std::unordered_map
 #include "IControls.h"
 #include "IPlugPaths.h"
+#include "NAMRigControls.h"
 
 #ifdef OS_WIN
   #include <Windows.h>
@@ -95,36 +96,71 @@ private:
   IActionFunction mDismiss;
 };
 
-class NAMKnobControl : public IVKnobControl, public IBitmapBase
+class NAMKnobControl : public IVKnobControl
 {
 public:
-  NAMKnobControl(const IRECT& bounds, int paramIdx, const char* label, const IVStyle& style, IBitmap bitmap)
+  NAMKnobControl(const IRECT& bounds, int paramIdx, const char* label, const IVStyle& style, const NAMTheme& theme)
   : IVKnobControl(bounds, paramIdx, label, style, true)
-  , IBitmapBase(bitmap)
+  , mTheme(theme)
   {
-    mInnerPointerFrac = 0.55;
   }
 
-  void OnRescale() override { mBitmap = GetUI()->GetScaledBitmap(mBitmap); }
+  void OnInit() override
+  {
+    IVKnobControl::OnInit();
+    // Bipolar params (gain in dB) draw their arc out from 0.
+    if (const IParam* p = GetParam())
+      if (p->GetMin() < 0.0 && p->GetMax() > 0.0)
+        mAnchorAngle = mAngle1 + static_cast<float>(p->ToNormalized(0.0)) * (mAngle2 - mAngle1);
+  }
 
   void DrawWidget(IGraphics& g) override
   {
-    float widgetRadius = GetRadius() * 0.73;
-    auto knobRect = mWidgetBounds.GetCentredInside(mWidgetBounds.W(), mWidgetBounds.W());
-    const float cx = knobRect.MW(), cy = knobRect.MH();
-    const float angle = mAngle1 + (static_cast<float>(GetValue()) * (mAngle2 - mAngle1));
-    DrawIndicatorTrack(g, angle, cx + 0.5, cy, widgetRadius);
-    g.DrawFittedBitmap(mBitmap, knobRect);
-    float data[2][2];
-    RadialPoints(angle, cx, cy, mInnerPointerFrac * widgetRadius, mInnerPointerFrac * widgetRadius, 2, data);
-    g.PathCircle(data[1][0], data[1][1], 3);
-    g.PathFill(IPattern::CreateRadialGradient(data[1][0], data[1][1], 4.0f,
-                                              {{GetColor(mMouseIsOver ? kX3 : kX1), 0.f},
-                                               {GetColor(mMouseIsOver ? kX3 : kX1), 0.8f},
-                                               {COLOR_TRANSPARENT, 1.0f}}),
-               {}, &mBlend);
-    g.DrawCircle(COLOR_BLACK.WithOpacity(0.5f), data[1][0], data[1][1], 3, &mBlend);
+    const float cx = mWidgetBounds.MW(), cy = mWidgetBounds.MH();
+    const float R = std::min(mWidgetBounds.W(), mWidgetBounds.H()) * 0.5f - 7.f;
+    const float angle = mAngle1 + static_cast<float>(GetValue()) * (mAngle2 - mAngle1);
+
+    // Track and value arc
+    const float a1 = std::min(angle, mAnchorAngle), a2 = std::max(angle, mAnchorAngle);
+    g.DrawArc(COLOR_BLACK.WithOpacity(0.6f), cx, cy, R + 5.f, mAngle1, mAngle2, &mBlend, 3.f);
+    g.DrawArc(mTheme.accent.WithOpacity(0.25f), cx, cy, R + 5.f, a1, a2, &mBlend, 7.f);
+    g.DrawArc(mTheme.accent, cx, cy, R + 5.f, a1, a2, &mBlend, 2.5f);
+
+    // Body
+    g.FillCircle(COLOR_BLACK.WithOpacity(0.55f), cx + 1.f, cy + 3.f, R, &mBlend);
+    g.PathClear();
+    g.PathCircle(cx, cy, R);
+    g.PathFill(IPattern::CreateLinearGradient(
+                 cx, cy - R, cx, cy + R, {{IColor(255, 62, 61, 66), 0.f}, {IColor(255, 16, 16, 18), 1.f}}),
+               IFillOptions(), &mBlend);
+
+    // Knurled skirt, turning with the knob
+    g.PathClear();
+    for (int i = 0; i < 36; i++)
+    {
+      const float a = (angle + i * 10.f) * static_cast<float>(PI) / 180.f;
+      const float sx = std::sin(a), sy = -std::cos(a);
+      g.PathMoveTo(cx + sx * R * 0.8f, cy + sy * R * 0.8f);
+      g.PathLineTo(cx + sx * R * 0.97f, cy + sy * R * 0.97f);
+    }
+    g.PathStroke(IPattern(COLOR_BLACK.WithOpacity(0.45f)), 1.f, IStrokeOptions(), &mBlend);
+
+    // Cap
+    const float rc = R * 0.72f;
+    g.PathClear();
+    g.PathCircle(cx, cy, rc);
+    g.PathFill(IPattern::CreateLinearGradient(
+                 cx - rc, cy - rc, cx + rc, cy + rc, {{IColor(255, 86, 86, 92), 0.f}, {IColor(255, 26, 26, 30), 1.f}}),
+               IFillOptions(), &mBlend);
+    g.DrawCircle(COLOR_BLACK.WithOpacity(0.6f), cx, cy, rc, &mBlend, 1.f);
+    g.DrawArc(COLOR_WHITE.WithOpacity(0.12f), cx, cy, rc - 1.f, -60.f, 60.f, &mBlend, 1.f);
+
+    const IColor pointer = mMouseIsOver ? LerpColor(mTheme.accent, COLOR_WHITE, 0.3f) : NAMRig::kCream;
+    g.DrawRadialLine(pointer, cx, cy, angle, R * 0.25f, R * 0.95f, &mBlend, 2.5f);
   }
+
+private:
+  const NAMTheme& mTheme;
 };
 
 class NAMSwitchControl : public IVSlideSwitchControl, public IBitmapBase
@@ -274,14 +310,14 @@ class NAMFileBrowserControl : public IDirBrowseControlBase
 public:
   NAMFileBrowserControl(const IRECT& bounds, int clearMsgTag, const char* labelStr, const char* fileExtension,
                         IFileDialogCompletionHandlerFunc ch, const IVStyle& style, const ISVG& loadSVG,
-                        const ISVG& clearSVG, const ISVG& leftSVG, const ISVG& rightSVG, const IBitmap& bitmap,
+                        const ISVG& clearSVG, const ISVG& leftSVG, const ISVG& rightSVG, const NAMTheme& theme,
                         const ISVG& globeSVG, const char* getButtonLabel, const char* getButtonURL)
   : IDirBrowseControlBase(bounds, fileExtension, false, false)
   , mClearMsgTag(clearMsgTag)
   , mDefaultLabelStr(labelStr)
   , mCompletionHandlerFunc(ch)
   , mStyle(style.WithColor(kFG, COLOR_TRANSPARENT).WithDrawFrame(false))
-  , mBitmap(bitmap)
+  , mTheme(theme)
   , mLoadSVG(loadSVG)
   , mClearSVG(clearSVG)
   , mLeftSVG(leftSVG)
@@ -294,7 +330,12 @@ public:
     mIgnoreMouse = true;
   }
 
-  void Draw(IGraphics& g) override { g.DrawFittedBitmap(mBitmap, mRECT); }
+  void Draw(IGraphics& g) override
+  {
+    g.FillRoundRect(COLOR_BLACK.WithOpacity(0.5f), mRECT, 6.f, &mBlend);
+    g.DrawRoundRect(mTheme.accent.WithOpacity(0.35f), mRECT, 6.f, &mBlend, 1.f);
+    g.DrawLine(COLOR_WHITE.WithOpacity(0.05f), mRECT.L + 6.f, mRECT.B + 0.5f, mRECT.R - 6.f, mRECT.B + 0.5f, &mBlend);
+  }
 
   void OnPopupMenuSelection(IPopupMenu* pSelectedMenu, int valIdx) override
   {
@@ -539,7 +580,7 @@ private:
   IFileDialogCompletionHandlerFunc mCompletionHandlerFunc;
   NAMFileNameControl* mFileNameControl = nullptr;
   IVStyle mStyle;
-  IBitmap mBitmap;
+  const NAMTheme& mTheme;
   ISVG mLoadSVG, mClearSVG, mLeftSVG, mRightSVG, mGlobeSVG;
   int mClearMsgTag;
 
@@ -551,44 +592,48 @@ private:
   NAMGetButtonControl* mGetButton = nullptr;
 };
 
-class NAMMeterControl : public IVPeakAvgMeterControl<>, public IBitmapBase
+class NAMMeterControl : public IVPeakAvgMeterControl<>
 {
   static constexpr float KMeterMin = -70.0f;
   static constexpr float KMeterMax = -0.01f;
 
 public:
-  NAMMeterControl(const IRECT& bounds, const IBitmap& bitmap, const IVStyle& style)
+  NAMMeterControl(const IRECT& bounds, const IVStyle& style, const NAMTheme& theme)
   : IVPeakAvgMeterControl<>(bounds, "", style.WithShowValue(false).WithDrawFrame(false).WithWidgetFrac(0.8),
                             EDirection::Vertical, {}, 0, KMeterMin, KMeterMax, {})
-  , IBitmapBase(bitmap)
+  , mTheme(theme)
   {
     SetPeakSize(1.0f);
+    mPeakValues.fill(0.f);
   }
 
-  void OnRescale() override { mBitmap = GetUI()->GetScaledBitmap(mBitmap); }
-
-  virtual void OnResize() override
+  // Segmented LED ladder: accent up to -12 dB, amber to -3 dB, red above.
+  void Draw(IGraphics& g) override
   {
-    SetTargetRECT(MakeRects(mRECT));
-    mWidgetBounds = mWidgetBounds.GetMidHPadded(5).GetVPadded(10);
-    MakeTrackRects(mWidgetBounds);
-    MakeStepRects(mWidgetBounds, mNSteps);
-    SetDirty(false);
+    g.FillRoundRect(COLOR_BLACK.WithOpacity(0.55f), mRECT, 4.f, &mBlend);
+    g.DrawRoundRect(COLOR_WHITE.WithOpacity(0.06f), mRECT, 4.f, &mBlend, 1.f);
+
+    const IRECT track = mRECT.GetPadded(-3.f);
+    const float segH = 4.f, gap = 1.5f;
+    const int nSegs = static_cast<int>((track.H() + gap) / (segH + gap));
+    const float level = static_cast<float>(GetValue(0));
+    const float peak = mPeakValues[0];
+    const int peakSeg = peak > 0.0001f ? std::min(nSegs - 1, static_cast<int>(peak * nSegs)) : -1;
+    const IColor amber(255, 242, 179, 61), red(255, 255, 64, 64);
+
+    for (int i = 0; i < nSegs; i++)
+    {
+      const float frac = (i + 0.5f) / nSegs;
+      const float bottom = track.B - i * (segH + gap);
+      const IRECT seg(track.L, bottom - segH, track.R, bottom);
+      const IColor c = frac < 0.83f ? mTheme.accent : (frac < 0.96f ? amber : red);
+      const bool lit = frac <= level || i == peakSeg;
+      g.FillRoundRect(lit ? c : c.WithOpacity(0.1f), seg, 1.f, &mBlend);
+    }
   }
 
-  void DrawBackground(IGraphics& g, const IRECT& r) override { g.DrawFittedBitmap(mBitmap, r); }
-
-  void DrawTrackHandle(IGraphics& g, const IRECT& r, int chIdx, bool aboveBaseValue) override
-  {
-    if (r.H() > 2)
-      g.FillRect(GetColor(kX1), r, &mBlend);
-  }
-
-  void DrawPeak(IGraphics& g, const IRECT& r, int chIdx, bool aboveBaseValue) override
-  {
-    g.DrawGrid(COLOR_BLACK, mTrackBounds.Get()[chIdx], 10, 2);
-    g.FillRect(GetColor(kX3), r, &mBlend);
-  }
+private:
+  const NAMTheme& mTheme;
 };
 
 // Container where we can refer to children by names instead of indices
@@ -734,12 +779,12 @@ public:
 class NAMSettingsPageControl : public IContainerBaseWithNamedChildren
 {
 public:
-  NAMSettingsPageControl(const IRECT& bounds, const IBitmap& bitmap, const IBitmap& inputLevelBackgroundBitmap,
+  NAMSettingsPageControl(const IRECT& bounds, const NAMTheme& theme, const IBitmap& inputLevelBackgroundBitmap,
                          const IBitmap& switchBitmap, ISVG closeSVG, const IVStyle& style,
                          const IVStyle& radioButtonStyle)
   : IContainerBaseWithNamedChildren(bounds)
   , mAnimationTime(0)
-  , mBitmap(bitmap)
+  , mTheme(theme)
   , mInputLevelBackgroundBitmap(inputLevelBackgroundBitmap)
   , mSwitchBitmap(switchBitmap)
   , mStyle(style)
@@ -813,7 +858,7 @@ public:
     const auto style = mStyle.WithDrawFrame(false).WithValueText(text);
     const IVStyle leftStyle = style.WithValueText(leftText);
 
-    AddNamedChildControl(new IBitmapControl(GetRECT(), mBitmap), mControlNames.bitmap)->SetIgnoreMouse(true);
+    AddNamedChildControl(new NAMRig::PanelControl(GetRECT(), mTheme, false), mControlNames.bitmap);
     const auto titleArea = GetRECT().GetPadded(-(pad + 10.0f)).GetFromTop(50.0f);
     AddNamedChildControl(new IVLabelControl(titleArea, "SETTINGS", titleStyle), mControlNames.title);
 
@@ -877,7 +922,7 @@ public:
   };
 
 private:
-  IBitmap mBitmap;
+  const NAMTheme& mTheme;
   IBitmap mInputLevelBackgroundBitmap;
   IBitmap mSwitchBitmap;
   IVStyle mStyle;
