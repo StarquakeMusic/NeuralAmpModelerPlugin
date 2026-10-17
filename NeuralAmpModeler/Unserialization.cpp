@@ -106,6 +106,24 @@ int _UnserializeRigExtras(const iplug::IByteChunk& chunk, int startPos, nlohmann
   return pos;
 }
 
+// Whether the state was written by the rig: the paths, the 0.7.16 params, the two mic params, then the marker.
+bool _IsRigState(const iplug::IByteChunk& chunk, int startPos)
+{
+  WDL_String str;
+  int pos = chunk.GetStr(str, startPos);
+  if (pos >= 0)
+    pos = chunk.GetStr(str, pos);
+  for (int i = 0; i < 16 && pos >= 0; i++)
+  {
+    double v = 0.0;
+    pos = chunk.Get(&v, pos);
+  }
+  if (pos < 0)
+    return false;
+  pos = chunk.GetStr(str, pos);
+  return pos >= 0 && pos <= chunk.Size() && strcmp(str.Get(), kRigStateMarker) == 0;
+}
+
 // Unserialize NAM Path, IR path, then named keys
 int _UnserializePathsAndExpectedKeys(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config,
                                      std::vector<std::string>& paramNames)
@@ -346,7 +364,10 @@ int NeuralAmpModeler::_UnserializeStateWithKnownVersion(const iplug::IByteChunk&
   _Version version(versionStr);
   // Act accordingly
   nlohmann::json config;
-  if (version >= _Version(0, 7, 16))
+  // 0.7.16 only exists in the Mojave builds, which added Mix. The official 0.8.0 and later don't have Mix, so states
+  // from those only have it if the rig wrote them.
+  const bool isMixBuild = version >= _Version(0, 7, 16) && !(version >= _Version(0, 7, 17));
+  if (version >= _Version(0, 7, 16) && (isMixBuild || _IsRigState(chunk, pos)))
   {
     pos = _GetConfigFrom_0_7_16(chunk, pos, config);
   }

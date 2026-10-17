@@ -898,10 +898,10 @@ public:
     }
 
     const float halfWidth = PLUG_WIDTH / 2.0f - pad;
-    const auto bottomArea = GetRECT().GetPadded(-pad).GetFromBottom(78.0f);
+    const auto bottomArea = GetRECT().GetPadded(-pad).GetFromBottom(93.0f);
     const float lineHeight = 15.0f;
     const auto modelInfoArea = bottomArea.GetFromLeft(halfWidth).GetFromTop(4 * lineHeight);
-    const auto aboutArea = bottomArea.GetFromRight(halfWidth).GetFromTop(5 * lineHeight);
+    const auto aboutArea = bottomArea.GetFromRight(halfWidth).GetFromTop(6 * lineHeight);
     AddNamedChildControl(new ModelInfoControl(modelInfoArea, leftStyle), mControlNames.modelInfo);
     AddNamedChildControl(new AboutControl(aboutArea, leftStyle, leftText), mControlNames.about);
 
@@ -1006,16 +1006,19 @@ private:
 
       buildInfoStr.SetFormatted(100, "Version %s %s %s", verStr.Get(), PLUG()->GetArchStr(), PLUG()->GetAPIStr());
 
-      AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 0), "NEURAL AMP MODELER",
+      AddChildControl(new IURLControl(GetRECT().SubRectVertical(6, 0), "NEURAL AMP MODELER",
                                       "https://www.neuralampmodeler.com", mText, COLOR_TRANSPARENT,
                                       PluginColors::HELP_TEXT_MO, PluginColors::HELP_TEXT_CLICKED));
-      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 1), "By Steven Atkinson", mStyle));
-      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 2), buildInfoStr.Get(), mStyle));
-      AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 3),
+      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(6, 1), "By Steven Atkinson", mStyle));
+      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(6, 2), buildInfoStr.Get(), mStyle));
+      AddChildControl(new IURLControl(GetRECT().SubRectVertical(6, 3),
                                       "Plug-in development: Steve Atkinson, Oli Larkin, ... ",
                                       "https://github.com/sdatkinson/NeuralAmpModelerPlugin/graphs/contributors", mText,
                                       COLOR_TRANSPARENT, PluginColors::HELP_TEXT_MO, PluginColors::HELP_TEXT_CLICKED));
-      AddChildControl(new ThirdPartyNoticesControl(GetRECT().SubRectVertical(5, 4), mText));
+      AddChildControl(new IURLControl(GetRECT().SubRectVertical(6, 4), "UI design: Starquake Music",
+                                      "https://github.com/StarquakeMusic/NeuralAmpModelerPlugin", mText,
+                                      COLOR_TRANSPARENT, PluginColors::HELP_TEXT_MO, PluginColors::HELP_TEXT_CLICKED));
+      AddChildControl(new ThirdPartyNoticesControl(GetRECT().SubRectVertical(6, 5), mText));
     };
 
   private:
