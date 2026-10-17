@@ -1,3 +1,33 @@
+<p align="center"><img src="docs/the-rig/icon.png" width="128" alt="The Rig icon"></p>
+
+# The Rig: a redesigned Neural Amp Modeler
+
+**The Rig** is a new interface for Neural Amp Modeler, designed by Starquake Music. It reads each capture's metadata and draws the gear it came from (amp head, combo, stompbox or rack), coloured by its tone. It also adds:
+
+- a fingerprint of each capture's gain curve
+- a live scope of the output
+- a cab with a movable mic
+- a pedalboard for the noise gate, EQ and levels
+- a capture library that browses a folder of `.nam` files as cards
+
+The sound engine is the official Neural Amp Modeler 0.8.0, unchanged.
+
+![The Rig](docs/the-rig/screenshot.png)
+
+### Download
+
+**[Download the latest macOS build](https://github.com/StarquakeMusic/NeuralAmpModelerPlugin/releases/latest)**: standalone app, VST3 and Audio Unit, for Apple Silicon (macOS 11+) and Intel (macOS 10.15+). The zip includes `THE_RIG_GUIDE.html`, a guide to installing and using it.
+
+Good to know:
+
+- The builds aren't notarized by Apple. After copying them into place, clear the quarantine flag (for example `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/NeuralAmpModeler.vst3`); the guide lists every step.
+- The Rig uses the same plugin ID as the official Neural Amp Modeler, so installing it replaces the official version. Sessions open in either one.
+- Only macOS builds are available.
+
+The original plugin is by Steven Atkinson and contributors. Everything below is the original README.
+
+---
+
 # Neural Amp Modeler Plug-in
 
 [![Build](https://github.com/sdatkinson/NeuralAmpModelerPlugin/actions/workflows/build-native.yml/badge.svg)](https://github.com/sdatkinson/NeuralAmpModelerPlugin/actions/workflows/build-native.yml)
