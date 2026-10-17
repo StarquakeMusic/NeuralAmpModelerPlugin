@@ -1,5 +1,6 @@
 #include <algorithm> // std::clamp, std::min
 #include <cmath> // pow
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <iostream>
@@ -975,7 +976,7 @@ std::string NeuralAmpModeler::_StageModel(const WDL_String& modelPath)
   try
   {
     nam::dspData modelData;
-    std::unique_ptr<nam::DSP> model = nam::get_dsp(std::string(modelPath.Get()), modelData);
+    std::unique_ptr<nam::DSP> model = nam::get_dsp(std::filesystem::u8path(modelPath.Get()), modelData);
 
     // Check that the model has 1 input and 1 output channel
     if (model->NumInputChannels() != 1)

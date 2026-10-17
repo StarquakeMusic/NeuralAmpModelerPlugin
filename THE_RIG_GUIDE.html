@@ -90,11 +90,11 @@
 <div class="wrap">
 
 <header class="hero">
-  <div class="eyebrow">Neural Amp Modeler · Mojave Intel build</div>
+  <div class="eyebrow">Neural Amp Modeler 0.8.0 · macOS, Apple Silicon and Intel</div>
   <h1>The Rig <span class="dot"></span> user guide</h1>
   <p class="lede">The Rig is a redesigned interface for Neural Amp Modeler. The plugin reads the information stored in each capture (what the gear is, who made it, how it was voiced) and draws that gear, with the whole interface coloured to match. The sound engine is unchanged. The cab gets one new tool: a mic you can move.</p>
   <nav class="toc">
-    <a href="#install">Install on Mojave</a>
+    <a href="#install">Install</a>
     <a href="#tour">Tour of the screen</a>
     <a href="#basics">Basics</a>
     <a href="#bay">Capture bay</a>
@@ -109,10 +109,10 @@
   </nav>
 </header>
 
-<h2 id="install"><small>Step 0</small>Installing on the Mojave machine</h2>
-<p>The zip has three builds plus this guide. They are Intel (x86_64) builds targeting macOS 10.14 and later. They aren't code-signed, so macOS will need to be told they're OK.</p>
+<h2 id="install"><small>Step 0</small>Installing</h2>
+<p>The zip has three builds plus this guide. They run natively on both kinds of Mac: Apple Silicon needs macOS 11 Big Sur or later, and Intel needs macOS 10.15 Catalina or later. They aren't code-signed, so macOS will need to be told they're OK.</p>
 <ol class="steps">
-  <li>Unzip <code>NeuralAmpModeler-Mojave-x86_64.zip</code>.</li>
+  <li>Unzip <code>NeuralAmpModeler-TheRig-0.8.0-macOS.zip</code>.</li>
   <li>Copy each file to its folder (create the folder if it doesn't exist):
     <table>
       <tr><th>File</th><th>Goes in</th><th>Used by</th></tr>
@@ -291,13 +291,13 @@ xattr -dr com.apple.quarantine /Applications/NeuralAmpModeler.app</code></pre>
 
 <h2 id="known"><small>Honest status</small>Not yet tested</h2>
 <ul>
-  <li>The builds compile and the screens were checked on a newer Mac running the Intel version, but they <b>haven't run on a real Mojave machine yet</b>. That's what this test is for.</li>
+  <li>The builds compile, and the standalone app was checked on an Apple Silicon Mac. They <b>haven't been loaded in a DAW yet</b>, and the Intel half hasn't been run on an Intel Mac.</li>
   <li>The mic settings (how dark off-axis gets, how much distance removes) haven't been tuned <b>by ear</b> with a real guitar. Feedback welcome; they're easy to adjust.</li>
   <li>Saving and reopening a DAW session with the edge IR and mic settings hasn't been tried in a host yet.</li>
 </ul>
 <p>Things worth reporting back: whether each format loads in your DAW, whether the amp and pedal fonts show up, and how the mic feels.</p>
 
-<footer>Neural Amp Modeler by Steven Atkinson and contributors. "The Rig" interface by <a href="https://github.com/StarquakeMusic/NeuralAmpModelerPlugin">Starquake Music</a>. Version 0.7.16, Intel x86_64, macOS 10.14+.</footer>
+<footer>Neural Amp Modeler by Steven Atkinson and contributors. "The Rig" interface by <a href="https://github.com/StarquakeMusic/NeuralAmpModelerPlugin">Starquake Music</a>. Version 0.8.0, Apple Silicon and Intel, macOS 10.15+.</footer>
 </div>
 </body>
 </html>
