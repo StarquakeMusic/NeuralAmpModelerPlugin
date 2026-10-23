@@ -400,9 +400,9 @@ private:
     g.DrawText(big, fittedPrimary.c_str(), inner.GetFromTop(inner.H() * 0.5f));
     if (!secondary.empty())
     {
-      IText small(10.f, kInk.WithOpacity(0.75f), "Michroma-Regular", EAlign::Center, EVAlign::Middle);
-      const std::string fitted = FitText(g, small, ToUpper(secondary), inner.W(), 8.f);
-      g.DrawText(small, fitted.c_str(), inner.GetFromTop(inner.H() * 0.5f).GetVShifted(inner.H() * 0.3f));
+      IText smallText(10.f, kInk.WithOpacity(0.75f), "Michroma-Regular", EAlign::Center, EVAlign::Middle);
+      const std::string fitted = FitText(g, smallText, ToUpper(secondary), inner.W(), 8.f);
+      g.DrawText(smallText, fitted.c_str(), inner.GetFromTop(inner.H() * 0.5f).GetVShifted(inner.H() * 0.3f));
     }
 
     const float tagY = inner.B - 10.f;
@@ -488,9 +488,9 @@ private:
     g.DrawText(big, fittedPrimary.c_str(), IRECT(text.L, text.T, text.R, text.T + 34.f));
     if (!secondary.empty())
     {
-      IText small(10.f, IColor(255, 200, 200, 206), "Michroma-Regular", EAlign::Near, EVAlign::Middle);
-      const std::string fitted = FitText(g, small, ToUpper(secondary), text.W(), 8.f);
-      g.DrawText(small, fitted.c_str(), IRECT(text.L, text.T + 34.f, text.R, text.T + 52.f));
+      IText smallText(10.f, IColor(255, 200, 200, 206), "Michroma-Regular", EAlign::Near, EVAlign::Middle);
+      const std::string fitted = FitText(g, smallText, ToUpper(secondary), text.W(), 8.f);
+      g.DrawText(smallText, fitted.c_str(), IRECT(text.L, text.T + 34.f, text.R, text.T + 52.f));
     }
 
     const float tagY = text.T + 72.f;
@@ -746,10 +746,10 @@ public:
     g.DrawLine(mTheme.accent.WithOpacity(0.15f), wave.L, wave.MH(), wave.R, wave.MH());
 
     const NAMFingerprint& fp = mTheme.gear.fingerprint;
-    const IText small(9.f, kCream.WithOpacity(0.45f), nullptr, EAlign::Center, EVAlign::Middle);
+    const IText smallText(9.f, kCream.WithOpacity(0.45f), nullptr, EAlign::Center, EVAlign::Middle);
     if (!mTheme.hasModel || !fp.valid || fp.outDb.size() < 2)
     {
-      g.DrawText(small, mTheme.hasModel ? "NOT MEASURED" : "NO CAPTURE", plot);
+      g.DrawText(smallText, mTheme.hasModel ? "NOT MEASURED" : "NO CAPTURE", plot);
       return;
     }
 
